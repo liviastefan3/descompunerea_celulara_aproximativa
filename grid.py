@@ -1,17 +1,22 @@
 import numpy as np
 import matplotlib.pyplot as plt
 from collections import deque
+from shapely.geometry import Polygon, box
 
 # Dimensiunea hărții și a unei celule
 LATIME = 400
 INALTIME = 300
 CELULA = 10   # => grila va avea 40 x 30 celule
 
-# Obstacole: (x_min, y_min, x_max, y_max)
 obstacole = [
-    (100, 200, 300, 240),
-    (160, 80, 200, 200),
-    (250, 40, 280, 160),
+    # bara de sus a lui T
+    Polygon([(100, 200), (300, 200), (300, 240), (100, 240)]),
+    # bara verticală a lui T
+    Polygon([(250, 40), (280, 40), (280, 200), (250, 200)]),
+    # triunghiul din stânga (ca în poză)
+    Polygon([(60, 70), (180, 70), (160, 120)]),
+    # triunghiul îngust din dreapta
+    Polygon([(300, 20), (320, 20), (310, 150)]),
 ]
 
 # Start și goal, în coordonate (x, y)
@@ -26,14 +31,12 @@ n_cols = LATIME // CELULA
 def celula_atinge_obstacol(row, col):
     """True dacă celula se suprapune (chiar și parțial) cu un obstacol."""
     x1 = col * CELULA
-    x2 = x1 + CELULA
     y1 = row * CELULA
-    y2 = y1 + CELULA
-    for (ox1, oy1, ox2, oy2) in obstacole:
-        if x1 < ox2 and x2 > ox1 and y1 < oy2 and y2 > oy1:
+    celula = box(x1, y1, x1 + CELULA, y1 + CELULA)
+    for obstacol in obstacole:
+        if celula.intersects(obstacol):
             return True
     return False
-
 
 # 0 = liber, 1 = ocupat
 grid = np.zeros((n_rows, n_cols), dtype=int)
@@ -107,7 +110,9 @@ def deseneaza(drum=None):
             "bo", markersize=12)
     ax.plot((goal[1] + 0.5) * CELULA, (goal[0] + 0.5) * CELULA,
             "ro", markersize=12)
-
+    for obstacol in obstacole:
+        xs, ys = obstacol.exterior.xy
+        ax.fill(xs, ys, color="blue", alpha=0.6)
     ax.set_title("Descompunere omogenă")
     plt.show()
 
