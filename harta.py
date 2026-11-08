@@ -260,11 +260,9 @@ def a_star(libere, vecini, start, goal, goal_xy):
     return celule, mijloace
 
 
-def metoda_arbore(obstacole, n_cols, n_rows, start_xy, goal_xy):
+def metoda_arbore(obstacole, n_cols, n_rows, start_xy, goal_xy, adancime_max=6):
     t0 = time.perf_counter()
     W, H = n_cols * CELULA, n_rows * CELULA
-    # adâncimea se alege ca celula minimă să fie cam cât celula grilei omogene
-    adancime_max = min(8, max(1, math.ceil(math.log2(max(n_cols, n_rows)))))
     obs = prep(unary_union(obstacole)) if obstacole else None
 
     radacina = Celula(0, 0, W, H, 0, obs)
@@ -278,7 +276,9 @@ def metoda_arbore(obstacole, n_cols, n_rows, start_xy, goal_xy):
     s = frunza_la(radacina, *start_xy)
     g = frunza_la(radacina, *goal_xy)
     if s is None or g is None or s.stare != LIBER or g.stare != LIBER:
-        return {"eroare": "Start sau goal este într-un obstacol!"}
+        return {"eroare": "Start sau goal este într-un obstacol sau într-o celulă "
+                          "mixtă (tratată ca ocupată) la această adâncime. "
+                          "Încearcă o adâncime mai mare sau mută punctele."}
 
     vecini = construieste_vecini(radacina, libere, adancime_max)
     celule, mijloace = a_star(libere, vecini, s.idx, g.idx, goal_xy)
@@ -324,6 +324,7 @@ class App:
         self.var_rows = tk.StringVar(value="30")
         self.unealta = tk.StringVar(value="patrat")
         self.metoda = tk.StringVar(value="grila")
+        self.var_adancime = tk.StringVar(value="6")
         self.status = tk.StringVar(value="Desenează obstacole, plasează start/goal și apasă „Găsește drum”.")
 
         self._construieste_ui()
@@ -363,6 +364,11 @@ class App:
                         value="grila", variable=self.metoda).pack(anchor="w")
         ttk.Radiobutton(f, text="Metoda arborelui (quadtree + A*)",
                         value="arbore", variable=self.metoda).pack(anchor="w")
+        fa = ttk.Frame(f)
+        fa.pack(anchor="w", pady=(6, 0))
+        ttk.Label(fa, text="Adâncime arbore (1-6):").pack(side="left")
+        ttk.Spinbox(fa, from_=1, to=6, width=4, state="readonly",
+                    textvariable=self.var_adancime).pack(side="left", padx=4)
         ttk.Button(f, text="Găsește drum", command=self.ruleaza).pack(fill="x", pady=(8, 0))
         ttk.Button(f, text="Șterge drumul / revino la editare",
                    command=self.sterge_rezultat).pack(fill="x", pady=(4, 0))
@@ -521,12 +527,16 @@ class App:
         if self.metoda.get() == "grila":
             r = metoda_grila(obs, self.n_cols, self.n_rows, self.start_xy, self.goal_xy)
         else:
-            r = metoda_arbore(obs, self.n_cols, self.n_rows, self.start_xy, self.goal_xy)
+            adancime = int(self.var_adancime.get())
+            r = metoda_arbore(obs, self.n_cols, self.n_rows, self.start_xy,
+                              self.goal_xy, adancime)
         if "eroare" in r:
             self.status.set(r["eroare"])
             messagebox.showerror("Eroare", r["eroare"])
             return
         self.rezultat = r
+        if r["tip"] == "quad":
+            nume += f", adâncime {r['adancime']}"
         text = f"{nume}\nCelule folosite: {r['n_celule']}\nTimp: {r['timp'] * 1000:.1f} ms\n"
         if r["puncte"] is None:
             text += "Nu există drum la această rezoluție."
