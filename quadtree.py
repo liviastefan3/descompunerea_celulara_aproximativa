@@ -145,46 +145,65 @@ if start is None or goal is None:
 
 # ---------------------------------------------------------------
 # Căutarea drumului (A*)
-# Costul = distanța reală parcursă, trecând prin mijlocul laturilor comune.
+# Drumul trece: centrul celulei -> jumătatea muchiei comune -> centrul
+# celulei vecine. Costul unui pas = lungimea acestor două segmente.
 # ---------------------------------------------------------------
 def distanta(p, q):
     return math.hypot(p[0] - q[0], p[1] - q[1])
 
 
+def cost_pas(i, j, mijloc):
+    """centru(i) -> jumătatea muchiei comune -> centru(j)"""
+    return (distanta(celule_libere[i].centru(), mijloc) +
+            distanta(mijloc, celule_libere[j].centru()))
+
+
 def a_star(start, goal):
-    # stare = (celulă, punctul prin care am intrat în ea)
-    coada = [(distanta(start_xy, goal_xy), 0.0, start, start_xy)]
+    def h(i):   # euristica: distanța în linie dreaptă până la goal
+        return distanta(celule_libere[i].centru(), goal_xy)
+
+    coada = [(h(start), 0.0, start)]
     cost = {start: 0.0}
-    parinte = {start: (None, start_xy)}
+    parinte = {start: (None, None)}     # celulă -> (celula anterioară, mijloc)
 
     while coada:
-        _, g, curent, punct = heapq.heappop(coada)
+        _, g, curent = heapq.heappop(coada)
         if curent == goal:
             break
         if g > cost[curent]:
             continue
         for vecin, mijloc in vecini[curent]:
-            g_nou = g + distanta(punct, mijloc)
+            g_nou = g + cost_pas(curent, vecin, mijloc)
             if vecin not in cost or g_nou < cost[vecin]:
                 cost[vecin] = g_nou
                 parinte[vecin] = (curent, mijloc)
-                h = distanta(mijloc, goal_xy)
-                heapq.heappush(coada, (g_nou + h, g_nou, vecin, mijloc))
+                heapq.heappush(coada, (g_nou + h(vecin), g_nou, vecin))
 
     if goal not in parinte:
         return None, None
 
     # reconstruim drumul mergând înapoi de la goal la start
-    celule, puncte = [], [goal_xy]
+    celule, mijloace = [], []
     nod = goal
     while nod is not None:
         celule.append(nod)
-        anterior, punct = parinte[nod]
-        puncte.append(punct)
+        anterior, mijloc = parinte[nod]
+        if mijloc is not None:
+            mijloace.append(mijloc)
         nod = anterior
     celule.reverse()
-    puncte.reverse()
-    return celule, puncte
+    mijloace.reverse()
+    return celule, mijloace
+
+
+def puncte_drum(celule, mijloace):
+    """start -> C0 -> M01 -> C1 -> M12 -> ... -> Cn -> goal"""
+    puncte = [start_xy, celule_libere[celule[0]].centru()]
+    for mijloc, c in zip(mijloace, celule[1:]):
+        puncte.append(mijloc)
+        puncte.append(celule_libere[c].centru())
+    puncte.append(goal_xy)
+    return puncte
 
 
 # ---------------------------------------------------------------
@@ -224,16 +243,32 @@ def deseneaza_pasi():
     plt.tight_layout()
 
 
-def deseneaza_rezultat(puncte):
+def deseneaza_rezultat(celule, mijloace):
     fig, ax = plt.subplots(figsize=(10, 7.5))
     deseneaza_celule(ax, frunze(radacina), mixt_ca_ocupat=True)
-    if puncte:
-        xs, ys = zip(*puncte)
-        ax.plot(xs, ys, color="orange", linewidth=3)
+    if celule:
+        # celulele prin care trece drumul, evidențiate
+        for i in celule:
+            c = celule_libere[i]
+            ax.add_patch(Rectangle((c.x, c.y), c.w, c.h,
+                                   facecolor="#ffe0b2", edgecolor="red",
+                                   linewidth=0.5))
+        xs, ys = zip(*puncte_drum(celule, mijloace))
+        ax.plot(xs, ys, color="orange", linewidth=2.5, zorder=3)
+        # centrele celulelor
+        cx, cy = zip(*[celule_libere[i].centru() for i in celule])
+        ax.plot(cx, cy, "ks", markersize=5, zorder=4,
+                label="centrul celulei")
+        # jumătățile muchiilor comune
+        if mijloace:
+            mx, my = zip(*mijloace)
+            ax.plot(mx, my, "o", color="green", markersize=6, zorder=4,
+                    label="jumătatea muchiei comune")
+        ax.legend(loc="upper right")
     ax.set_title("Metoda arborelui (quadtree)")
 
 
-drum_celule, drum_puncte = a_star(start, goal)
+drum_celule, drum_mijloace = a_star(start, goal)
 
 toate = frunze(radacina)
 print(f"Frunze în arbore: {len(toate)} "
@@ -242,10 +277,11 @@ print(f"Celule libere: {len(celule_libere)}")
 if drum_celule is None:
     print("Nu există drum la această adâncime.")
 else:
-    lungime = sum(distanta(p, q) for p, q in zip(drum_puncte, drum_puncte[1:]))
+    puncte = puncte_drum(drum_celule, drum_mijloace)
+    lungime = sum(distanta(p, q) for p, q in zip(puncte, puncte[1:]))
     print(f"Drum găsit, prin {len(drum_celule)} celule, "
           f"lungime {lungime:.1f} unități.")
 
 deseneaza_pasi()
-deseneaza_rezultat(drum_puncte)
+deseneaza_rezultat(drum_celule, drum_mijloace)
 plt.show()
