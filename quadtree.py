@@ -2,7 +2,7 @@ import heapq
 import math
 import matplotlib
 
-matplotlib.use("macosx")
+#matplotlib.use("macosx")
 import matplotlib.pyplot as plt
 from matplotlib.patches import Rectangle
 from shapely.geometry import Polygon, box
